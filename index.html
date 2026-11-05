@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="An offline to-do list that stores tasks only in your browser.">
+<title>Pocket Tasks · 口袋清单</title>
+<style>
+:root{font-family:"Segoe UI","Microsoft YaHei",sans-serif;color:#30313d;background:#f5f3f8;color-scheme:light}*{box-sizing:border-box}body{margin:0;padding:48px 18px}main{max-width:640px;margin:auto}header{display:flex;justify-content:space-between;align-items:center;margin-bottom:48px}.brand{font-size:12px;letter-spacing:.15em;font-weight:700}.badge{font-size:12px;color:#70677e}h1{font-size:42px;letter-spacing:-.04em;margin:0 0 12px}.subtitle{font-size:14px;color:#7b7485;line-height:1.6}form{display:flex;gap:9px;margin:28px 0 18px}input[type=text]{min-width:0;flex:1;padding:14px;border:1px solid #dcd5e5;border-radius:12px;font:inherit;background:#fff}button{padding:11px 15px;background:#655180;color:#fff;border:0;border-radius:10px;font:inherit;font-size:13px;cursor:pointer}button:focus-visible,input:focus-visible{outline:3px solid #ba9cdb;outline-offset:3px}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0}.toolbar button{background:#eae4f0;color:#685b77}.toolbar button[aria-pressed=true]{background:#655180;color:#fff}#count{margin-left:auto;font-size:12px;color:#82798c;align-self:center}ul{padding:0;list-style:none;margin:0}li{display:flex;gap:13px;align-items:center;background:#fff;margin-bottom:9px;padding:17px;border:1px solid #e7e1ed;border-radius:13px}li input{width:19px;height:19px;accent-color:#655180;flex-shrink:0}li span{flex:1;overflow-wrap:anywhere;line-height:1.5}li.done span{text-decoration:line-through;color:#99909f}.remove{background:transparent;color:#a08b9a;padding:7px;font-size:12px}#empty{text-align:center;color:#9b91a4;padding:46px 12px;border:1px dashed #d8cfe2;border-radius:14px}footer{font-size:12px;color:#94899d;margin-top:28px;line-height:1.8}#message{color:#9a3c46;font-size:13px;min-height:18px}.secondary{background:#eae4f0;color:#685b77;margin-top:15px}
+@media(max-width:480px){body{padding:25px 16px}header{margin-bottom:35px}h1{font-size:34px}li{padding:14px}.toolbar{gap:5px}.toolbar button{padding:9px 12px}}
+</style>
+</head>
+<body>
+<main>
+<header><span class="brand">POCKET TASKS</span><span class="badge">不登录 · 离线可用</span></header>
+<h1>把事情，一件件完成。</h1>
+<p class="subtitle">写下今天想做的事。清单保存在你的浏览器里。</p>
+<form id="add"><input id="text" type="text" maxlength="300" placeholder="添加一件待办事项……" aria-label="新的待办事项" required autocomplete="off"><button type="submit">添加</button></form>
+<nav class="toolbar" aria-label="筛选任务"><button type="button" data-filter="all" aria-pressed="true">全部</button><button type="button" data-filter="active" aria-pressed="false">待完成</button><button type="button" data-filter="done" aria-pressed="false">已完成</button><span id="count" role="status"></span></nav>
+<ul id="tasks" aria-label="待办清单"></ul>
+<p id="empty">清单还是空的，从一件小事开始。</p>
+<button type="button" id="clear" class="secondary">清理已完成</button>
+<p id="message" role="alert"></p>
+<footer>不发送数据，不加载第三方资源。清除浏览器数据会删除已保存的清单。<br>建议不要将密码或其他敏感信息写进待办事项。</footer>
+</main>
+<script>
+'use strict';
+const KEY='pocket-tasks:v1';
+const $=id=>document.getElementById(id);
+let tasks=[],filter='all';
+function validTask(t){return t&&typeof t.id==='string'&&typeof t.text==='string'&&t.text.trim().length>0&&t.text.length<=300&&typeof t.done==='boolean';}
+try{const saved=JSON.parse(localStorage.getItem(KEY)||'[]');if(Array.isArray(saved))tasks=saved.filter(validTask);}catch{$('message').textContent='无法读取本地存储。你仍可以在当前页面使用清单。';}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(tasks));$('message').textContent='';}catch{$('message').textContent='浏览器不允许保存；关闭页面后本次修改可能丢失。';}}
+function selected(items,mode){return items.filter(t=>mode==='all'||(mode==='done'?t.done:!t.done));}
+function render(){
+ const visible=selected(tasks,filter);$('tasks').replaceChildren();
+ for(const t of visible){
+  const li=document.createElement('li');if(t.done)li.className='done';
+  const check=document.createElement('input');check.type='checkbox';check.checked=t.done;check.setAttribute('aria-label',`标记完成：${t.text}`);
+  check.addEventListener('change',()=>{t.done=check.checked;save();render();});
+  const text=document.createElement('span');text.textContent=t.text;
+  const remove=document.createElement('button');remove.type='button';remove.className='remove';remove.textContent='删除';remove.setAttribute('aria-label',`删除：${t.text}`);
+  remove.addEventListener('click',()=>{tasks=tasks.filter(x=>x.id!==t.id);save();render();});
+  li.append(check,text,remove);$('tasks').append(li);
+ }
+ $('empty').hidden=visible.length>0;$('empty').textContent=tasks.length?'这个分类里暂无任务。':'清单还是空的，从一件小事开始。';
+ $('count').textContent=`${tasks.filter(t=>!t.done).length} 件待完成`;
+ $('clear').disabled=!tasks.some(t=>t.done);
+ for(const b of document.querySelectorAll('[data-filter]'))b.setAttribute('aria-pressed',String(b.dataset.filter===filter));
+}
+$('add').addEventListener('submit',event=>{event.preventDefault();const text=$('text').value.trim();if(!text)return;tasks.push({id:`${Date.now()}-${Math.random().toString(36).slice(2)}`,text,done:false});$('text').value='';save();render();$('text').focus();});
+for(const b of document.querySelectorAll('[data-filter]'))b.addEventListener('click',()=>{filter=b.dataset.filter;render();});
+$('clear').addEventListener('click',()=>{tasks=tasks.filter(t=>!t.done);save();render();});
+render();
+</script>
+</body>
+</html>
